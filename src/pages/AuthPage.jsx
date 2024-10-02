@@ -1,32 +1,58 @@
-import axios from "axios";
-import { useEffect, useState } from "react";
+import {
+    createUserWithEmailAndPassword,
+    getAuth,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    GoogleAuthProvider
+} from "firebase/auth";
+import { useEffect, useState, useContext } from "react";
 import { Button, Col, Form, Image, Modal, Row } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
-import useLocalStorage from "use-local-storage";
+import { AuthContext } from "../components/AuthProvider";
+import { provider } from "../firebase";
 
 export default function AuthPage() {
     const loginImage = "https://sig1.co/img-twitter-1";
-    const url = "https://8a4fdc69-ee00-4e2b-af31-261a4de95be2-00-2qiha3ekrjxkb.pike.replit.dev"
 
     const [modalShow, setModalShow] = useState(null);
     const handleShowLogin = () => setModalShow("Login");
     const handleShowSignup = () => setModalShow("Signup");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
-    const [authToken, setAuthToken] = useLocalStorage("authToken", "");
-    const [usernameExists, setUsernameExists] = useState(false);
-    const [invalidPassword, setInvalidPassword] = useState(false);
-    const [loginFailed, setLoginFailed] = useState(false);
-
     const navigate = useNavigate();
+    const auth = getAuth();
+    const { currentUser } = useContext(AuthContext);
+
+    const signInWithGoogle = () => {
+        signInWithPopup(auth, provider)
+            .then((result) => {
+                // This gives you a Google Access Token. You can use it to access the Google API.
+                const credential = GoogleAuthProvider.credentialFromResult(result);
+                const token = credential.accessToken;
+                // The signed-in user info.
+                const user = result.user;
+                // IdP data available using getAdditionalUserInfo(result)
+                // ...
+            }).catch((error) => {
+                // Handle Errors here.
+                const errorCode = error.code;
+                const errorMessage = error.message;
+                // The email of the user's account used.
+                const email = error.customData.email;
+                // The AuthCredential type that was used.
+                const credential = GoogleAuthProvider.credentialFromError(error);
+                // ...
+            });
+    }
 
     useEffect(() => {
-        if (username) {
-            axios.get(`${url}/username/${username}`)
-                .then(res => setUsernameExists(res.data.exists))
-                .catch(err => console.error(err));
-        }
-    }, [username]);
+        if (currentUser) navigate("/profile");
+    }, [currentUser, navigate]);
+
+    // const [authToken, setAuthToken] = useLocalStorage("authToken", "");
+    // const [usernameExists, setUsernameExists] = useState(false);
+    const [invalidPassword, setInvalidPassword] = useState(false);
+    const [loginFailed, setLoginFailed] = useState(false);
 
     useEffect(() => {
         const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
@@ -38,32 +64,24 @@ export default function AuthPage() {
         }
     }, [password, setInvalidPassword])
 
-    useEffect(() => {
-        if (authToken) {
-            navigate("/profile");
-        }
-    }, [authToken, navigate]);
-
     const handleSignup = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post(`${url}/signup`, { username, password });
-            console.log(res.data);
+            const res = await createUserWithEmailAndPassword(
+                auth, username, password
+            );
+            console.log(res.user)
         } catch (error) {
-            console.error(error.response.data.message);
+            console.error(error)
         }
     }
 
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post(`${url}/login`, { username, password });
-            if (res.data && res.data.auth === true && res.data.token) {
-                setAuthToken(res.data.token);
-                console.log(res.data);
-            }
+            await signInWithEmailAndPassword(auth, username, password);
         } catch (error) {
-            console.log(error)
+            console.error(error)
             setLoginFailed(true)
         }
     }
@@ -81,7 +99,7 @@ export default function AuthPage() {
                 <p className="my-5" style={{ fontSize: 31 }}>Join Twitter Today.</p>
 
                 <Col sm={5} className="d-grid gap-2">
-                    <Button className="rounded-pill" variant="outline-dark">
+                    <Button className="rounded-pill" variant="outline-dark" onClick={signInWithGoogle}>
                         <i className="bi bi-google"></i> Sign up with Google
                     </Button>
                     <Button className="rounded-pill" variant="outline-dark">
@@ -128,13 +146,13 @@ export default function AuthPage() {
                                     placeholder="Enter username"
                                     aria-describedby="usernameHelp"
                                 />
-                                {
+                                {/* {
                                     modalShow === "Signup" && usernameExists && (
                                         <Form.Text id="usernameHelp" className="text-danger">
                                             Username already exists
                                         </Form.Text>
                                     )
-                                }
+                                } */}
                             </Form.Group>
 
                             <Form.Group className="mb-3" controlId="formBasicPassword">
