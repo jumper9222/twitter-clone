@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore";
 import { db, storage } from "../../firebase";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
@@ -48,6 +48,39 @@ export const savePost = createAsyncThunk(
             };
 
             return post;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
+    }
+)
+
+export const updatePost = createAsyncThunk(
+    "posts/updatePost",
+    async ({ userId, postId, newPostContent, newFile }) => {
+        try {
+            let newImageUrl;
+            if (newFile) {
+                const imageRef = ref(storage, `posts/${newFile.name}`);
+                const response = await uploadBytes(imageRef, newFile);
+                newImageUrl = await getDownloadURL(response.ref);
+            }
+
+            const postRef = doc(db, `users/${userId}/posts/${postId}`);
+            const postSnap = await getDoc(postRef);
+            if (postSnap.exists()) {
+                const postData = postSnap.data();
+                const updatedData = {
+                    ...postData,
+                    content: newPostContent || postData.content,
+                    imageUrl: newImageUrl || postData.imageUrl
+                };
+                await updateDoc(postRef, updatedData);
+                const updatedPost = { id: postId, ...updatedData }
+                return updatedPost;
+            } else {
+                throw new Error("Post does not exist")
+            }
         } catch (error) {
             console.error(error);
             throw error;
@@ -113,6 +146,15 @@ const postsSlice = createSlice({
             })
             .addCase(savePost.fulfilled, (state, action) => {
                 state.posts = [action.payload, ...state.posts];
+            })
+            .addCase(updatePost.fulfilled, (state, action) => {
+                const updatedPost = action.payload;
+                const postIndex = state.posts.findIndex(
+                    (post) => post.id === updatedPost.id
+                );
+                if (postIndex !== -1) {
+                    state.posts[postIndex] = updatedPost;
+                }
             })
             .addCase(likePost.fulfilled, (state, action) => {
                 const { userId, postId } = action.payload;
